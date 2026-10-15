@@ -121,5 +121,62 @@ footer{border-top:1px solid #382b18;padding:25px 0 32px;color:var(--muted);font-
  <div class="wrap">© <span id="tahun"></span> Kerjasama Malaysia · Demonstrasi maklumat dan hubungan.<br>18+ · Sila semak peraturan tempatan sebelum menggunakan sebarang perkhidmatan.</div>
 </footer>
 <script>document.getElementById('tahun').textContent=new Date().getFullYear();</script>
+<script>
+/* Public contact sync: active operator numbers come from the admin panel's Supabase tables. */
+(async function syncOperatorContacts(){
+  const SUPABASE_URL = 'https://kbcniwijbnvvlcguauzv.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_DGUgYuNGpIavpkHsVbP5ww_VCsr-BG0';
+  const headers = { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY };
+  const slugByName = {
+    'HOKIVIP77': 'hokivip77',
+    'LIONKING77': 'lionking77',
+    'HKV77': 'hkv77',
+    'JUDIVIP77': 'judivip77'
+  };
+  try {
+    const pagesRes = await fetch(SUPABASE_URL + '/rest/v1/partnership_pages?select=id,name,slug', {headers});
+    if (!pagesRes.ok) throw new Error('Tidak dapat membaca senarai halaman (' + pagesRes.status + ')');
+    const pages = await pagesRes.json();
+    const contactsRes = await fetch(SUPABASE_URL + '/rest/v1/partnership_whatsapp?select=page_id,label,phone,sort_order,is_active&is_active=eq.true&order=sort_order.asc,id.asc', {headers});
+    if (!contactsRes.ok) throw new Error('Tidak dapat membaca nombor operator (' + contactsRes.status + ')');
+    const contacts = await contactsRes.json();
+    const pageBySlug = new Map(pages.map(p => [p.slug, p]));
+    document.querySelectorAll('.card').forEach(card => {
+      const heading = card.querySelector('h3');
+      const list = card.querySelector('.contact-list');
+      if (!heading || !list) return;
+      const slug = slugByName[heading.textContent.trim().toUpperCase()];
+      if (!slug) return;
+      const page = pageBySlug.get(slug);
+      if (!page) return;
+      const active = contacts.filter(c => String(c.page_id) === String(page.id) && c.is_active && c.phone);
+      // Keep existing static buttons if no contacts have been saved for this company yet.
+      if (!active.length) return;
+      // Preserve Telegram and Emergency links, replace only old Operator buttons.
+      list.querySelectorAll('a').forEach(a => {
+        if (/^operator\s*\d+/i.test(a.textContent.trim())) a.remove();
+      });
+      active.forEach(c => {
+        const a = document.createElement('a');
+        const phone = String(c.phone).replace(/\D/g, '');
+        if (!phone) return;
+        a.className = 'wa';
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.href = 'https://wa.me/' + phone;
+        a.textContent = c.label || 'Operator';
+        list.appendChild(a);
+      });
+    });
+  } catch (err) {
+    console.warn('Panel sync belum tersedia; nombor asal dikekalkan.', err);
+  }
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(()=>{const U='https://kbcniwijbnvvlcguauzv.supabase.co',K='sb_publishable_DGUgYuNGpIavpkHsVbP5ww_VCsr-BG0';if(!window.supabase)return;const db=window.supabase.createClient(U,K);const run=async()=>{try{const {data:pages,error:pe}=await db.from('partnership_pages').select('id,name,slug');if(pe)throw pe;const {data:bs,error}=await db.from('partnership_banners').select('page_id,storage_path,caption,sort_order,is_active').eq('is_active',true).order('sort_order');if(error)throw error;for(const p of (pages||[])){const card=[...document.querySelectorAll('.brand-card,article.card,.card')].find(c=>c.querySelector('h3')?.textContent.trim().toUpperCase()===p.name.trim().toUpperCase());if(!card)continue;const list=(bs||[]).filter(b=>b.page_id===p.id);if(!list.length)continue;const old=card.querySelector('img');if(!old)continue;const wrap=document.createElement('div');wrap.className='live-banner-slider';wrap.style.cssText='position:relative;width:100%;overflow:hidden;border-radius:12px;background:#080808';const img=document.createElement('img');img.alt=p.name+' banner';img.style.cssText='display:block;width:100%;height:auto;max-height:320px;object-fit:contain;transition:opacity .25s';wrap.append(img);if(list.length>1){const nav=document.createElement('div');nav.style.cssText='display:flex;justify-content:center;gap:8px;padding:8px';list.forEach((_,i)=>{const d=document.createElement('button');d.type='button';d.textContent='●';d.setAttribute('aria-label','Banner '+(i+1));d.style.cssText='background:transparent;color:#d6b45d;border:0;padding:4px;min-height:30px';d.addEventListener('click',()=>show(i));nav.append(d)});wrap.append(nav)}let ix=0;function show(i){ix=i;img.src=db.storage.from('company-banners').getPublicUrl(list[ix].storage_path).data.publicUrl;img.alt=list[ix].caption||p.name+' banner'}show(0);if(list.length>1){wrap.addEventListener('touchstart',e=>{wrap.dataset.x=e.changedTouches[0].clientX},{passive:true});wrap.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-Number(wrap.dataset.x||0);if(Math.abs(dx)>35)show((ix+(dx<0?1:list.length-1))%list.length)},{passive:true});setInterval(()=>show((ix+1)%list.length),5000)}old.replaceWith(wrap)}}catch(e){console.warn('Banner dinamik belum tersedia:',e.message)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run);else run()})();
+</script>
 </body>
 </html>
